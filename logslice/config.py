@@ -1,46 +1,49 @@
-"""Configuration dataclass for logslice run options."""
+"""Configuration dataclass for logslice."""
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import List
 
 
 @dataclass
 class LogSliceConfig:
-    """Holds all runtime configuration for a logslice invocation."""
+    """Top-level runtime configuration for logslice."""
 
-    # Input
-    file: str = ""
+    # I/O
     encoding: str = "utf-8"
+    output_format: str = "plain"  # plain | json | csv
 
     # Filtering
-    pattern: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
-    time_format: Optional[str] = None
-    invert_match: bool = False
+    pattern: str = ""
+    extra_patterns: List[str] = field(default_factory=list)
+    start_time: str = ""
+    end_time: str = ""
+    time_format: str = "%Y-%m-%d %H:%M:%S"
 
-    # Output
-    output_format: str = "plain"  # plain | json | csv
-    show_line_numbers: bool = False
-    max_lines: Optional[int] = None
-
-    # Highlighting
+    # Display
     highlight: bool = False
     highlight_color: str = "yellow"
+    show_line_numbers: bool = False
 
-    # Extra
-    extra_patterns: List[str] = field(default_factory=list)
+    # Deduplication
+    deduplicate: bool = False
+    dedup_skip_fields: int = 0  # 0 means compare the full line
+    dedup_max_seen: int = 100_000
 
-    def validate(self) -> List[str]:
-        """Return a list of validation error messages (empty if valid)."""
-        errors = []
-        if not self.file:
-            errors.append("'file' must not be empty.")
-        if self.output_format not in ("plain", "json", "csv"):
-            errors.append(
-                f"Invalid output_format '{self.output_format}'. "
-                "Choose from: plain, json, csv."
-            )
-        if self.max_lines is not None and self.max_lines < 1:
-            errors.append("'max_lines' must be a positive integer.")
-        return errors
+
+def validate(config: LogSliceConfig) -> List[str]:
+    """Return a list of validation error messages (empty list means valid)."""
+    errors: List[str] = []
+
+    if config.output_format not in ("plain", "json", "csv"):
+        errors.append(
+            f"Invalid output_format '{config.output_format}'; "
+            "must be one of: plain, json, csv"
+        )
+
+    if config.dedup_skip_fields < 0:
+        errors.append("dedup_skip_fields must be >= 0")
+
+    if config.dedup_max_seen < 1:
+        errors.append("dedup_max_seen must be >= 1")
+
+    return errors
