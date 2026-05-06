@@ -1,65 +1,49 @@
-"""High-level runner that ties together config, parsing, formatting, and highlighting."""
+"""High-level runner that wires together parsing, formatting, and stats."""
 
-from typing import Optional, TextIO
-import sys
+from typing import Optional
 
 from logslice.config import LogSliceConfig
 from logslice.parser import parse_file, filter_lines
 from logslice.formatter import format_lines
 from logslice.highlighter import highlight_lines
+from logslice.stats import ParseStats
 
 
-def run_with_config(config: LogSliceConfig, output: Optional[TextIO] = None) -> int:
-    """Execute logslice with the given config.
+def run_with_config(config: LogSliceConfig, output=None) -> ParseStats:
+    """Execute a full log-slice run using *config*.
 
-    Returns an exit code: 0 on success, 1 on validation/IO error.
-    Writes results to *output* (defaults to sys.stdout).
+    Reads *config.file*, applies time-range and pattern filters, optionally
+    highlights matches, formats each surviving line, writes to *output* (or
+    stdout when *output* is None), and returns a populated :class:`ParseStats`.
     """
-    if output is None:
-        output = sys.stdout
+    import sys
 
-    errors = config.validate()
-    if errors:
-        for err in errors:
-            print(f"logslice: error: {err}", file=sys.stderr)
-        return 1
+    out = output if output is not None else sys.stdout
+    stats = ParseStats()
 
-    try:
-        raw_lines = parse_file(
-            config.file,
-            encoding=config.encoding,
-        )
-    except (OSError, IOError) as exc:
-        print(f"logslice: error: {exc}", file=sys.stderr)
-        return 1
-
-    filtered = filter_lines(
-        raw_lines,
-        pattern=config.pattern,
-        start_time=config.start_time,
-        end_time=config.end_time,
-        time_format=config.time_format,
-        invert=config.invert_match,
+    lines = parse_file(
+        config.file,
+        encoding=config.encoding,
     )
 
-    if config.max_lines is not None:
-        filtered = filtered[: config.max_lines]
+    filtered = filter_lines(
+        lines,
+        patterns=config.extra_patterns,
+        start=config.start_time,
+        end=config.end_time,
+        stats=stats,
+    )
 
-    if config.highlight and config.pattern:
-        filtered = highlight_lines(
-            filtered,
-            pattern=config.pattern,
-            color=config.highlight_color,
-            enabled=True,
-        )
+    if config.highlight and config.extra_patterns:
+        filtered = highlight_lines(filtered, config.extra_patterns)
 
     formatted = format_lines(
         filtered,
         fmt=config.output_format,
-        show_line_numbers=config.show_line_numbers,
+        line_numbers=getattr(config, "line_numbers", False),
     )
 
     for line in formatted:
-        print(line, file=output)
+        out.write(line + "\n")
 
-    return 0
+    return stats
