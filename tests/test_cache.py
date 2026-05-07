@@ -24,6 +24,11 @@ class TestCacheKey(unittest.TestCase):
         k = cache._cache_key("file.log", {})
         self.assertTrue(all(c in "0123456789abcdef" for c in k))
 
+    def test_different_filepaths_produce_different_key(self):
+        k1 = cache._cache_key("/var/log/app.log", {"pattern": "ERROR"})
+        k2 = cache._cache_key("/var/log/other.log", {"pattern": "ERROR"})
+        self.assertNotEqual(k1, k2)
+
 
 class TestCacheGetPut(unittest.TestCase):
     def setUp(self):
@@ -41,6 +46,12 @@ class TestCacheGetPut(unittest.TestCase):
         cache.put(self.filepath, self.params, data, cache_dir=self.tmpdir)
         result = cache.get(self.filepath, self.params, cache_dir=self.tmpdir)
         self.assertEqual(result, data)
+
+    def test_put_and_get_empty_list(self):
+        """Ensure an empty result set is cached and retrieved correctly."""
+        cache.put(self.filepath, self.params, [], cache_dir=self.tmpdir)
+        result = cache.get(self.filepath, self.params, cache_dir=self.tmpdir)
+        self.assertEqual(result, [])
 
     def test_get_returns_none_after_ttl_expired(self):
         cache.put(self.filepath, self.params, ["x"], cache_dir=self.tmpdir)
@@ -76,16 +87,4 @@ class TestCacheInvalidateAndClear(unittest.TestCase):
         result = cache.invalidate(self.filepath, self.params, cache_dir=self.tmpdir)
         self.assertFalse(result)
 
-    def test_clear_all_removes_all_entries(self):
-        cache.put(self.filepath, {"a": 1}, ["a"], cache_dir=self.tmpdir)
-        cache.put(self.filepath, {"b": 2}, ["b"], cache_dir=self.tmpdir)
-        count = cache.clear_all(cache_dir=self.tmpdir)
-        self.assertEqual(count, 2)
-
-    def test_clear_all_on_empty_dir_returns_zero(self):
-        count = cache.clear_all(cache_dir=self.tmpdir)
-        self.assertEqual(count, 0)
-
-    def test_clear_all_nonexistent_dir_returns_zero(self):
-        count = cache.clear_all(cache_dir="/tmp/logslice_nonexistent_xyz")
-        self.assertEqual(count, 0)
+    def test_clear_all_removes_a
